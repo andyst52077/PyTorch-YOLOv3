@@ -2,10 +2,6 @@
 A minimal PyTorch implementation of YOLOv3, with support for training, inference and evaluation.
 
 ## Installation
-#####creat virtual env
-    $ conda create --name yolo python=3.6
-    $ conda activate yolo
-
 ##### Clone and install requirements
     $ git clone https://github.com/andyst52077/PyTorch-YOLOv3.git
     $ cd PyTorch-YOLOv3/
