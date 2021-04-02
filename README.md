@@ -2,47 +2,21 @@
 A minimal PyTorch implementation of YOLOv3, with support for training, inference and evaluation.
 
 ## Installation
+#####creat virtual env
+    $ conda create --name yolo python=3.6
+    $ conda activate yolo
+
 ##### Clone and install requirements
     $ git clone https://github.com/andyst52077/PyTorch-YOLOv3.git
     $ cd PyTorch-YOLOv3/
-    $ sudo pip3 install -r requirements.txt
+    $ pip3 install -r requirements.txt
 
 ##### Download pretrained weights
     $ cd weights/
     $ bash download_weights.sh
 
-##### Download COCO
-    $ cd data/
-    $ bash get_coco_dataset.sh
-    
-## Test
-Evaluates the model on COCO test.
-
-    $ python3 test.py --weights_path weights/yolov3.weights
-
-| Model                   | mAP (min. 50 IoU) |
-| ----------------------- |:-----------------:|
-| YOLOv3 608 (paper)      | 57.9              |
-| YOLOv3 608 (this impl.) | 57.3              |
-| YOLOv3 416 (paper)      | 55.3              |
-| YOLOv3 416 (this impl.) | 55.5              |
-
 ## Inference
-Uses pretrained weights to make predictions on images. Below table displays the inference times when using as inputs images scaled to 256x256. The ResNet backbone measurements are taken from the YOLOv3 paper. The Darknet-53 measurement marked shows the inference time of this implementation on my 1080ti card.
-
-| Backbone                | GPU      | FPS      |
-| ----------------------- |:--------:|:--------:|
-| ResNet-101              | Titan X  | 53       |
-| ResNet-152              | Titan X  | 37       |
-| Darknet-53 (paper)      | Titan X  | 76       |
-| Darknet-53 (this impl.) | 1080ti   | 74       |
-
     $ python3 detect.py --image_folder data/samples/
-
-<p align="center"><img src="assets/giraffe.png" width="480"\></p>
-<p align="center"><img src="assets/dog.png" width="480"\></p>
-<p align="center"><img src="assets/traffic.png" width="480"\></p>
-<p align="center"><img src="assets/messi.png" width="480"\></p>
 
 ## Train
 ```
