@@ -23,6 +23,7 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.ticker import NullLocator
+import cv2
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -53,98 +54,153 @@ if __name__ == "__main__":
         # Load checkpoint weights
         model.load_state_dict(torch.load(opt.weights_path))
 
-    model.eval()  # Set in evaluation mode
-
-    dataloader = DataLoader(
-        ImageFolder(opt.image_folder, transform= \
-            transforms.Compose([DEFAULT_TRANSFORMS, Resize(opt.img_size)])),
-        batch_size=opt.batch_size,
-        shuffle=False,
-        num_workers=opt.n_cpu,
-    )
+    model.eval()  
 
     classes = load_classes(opt.class_path)  # Extracts class labels from file
 
     Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
+    
+    fr = 0
+    r = 10
+    cap=cv2.VideoCapture('test.mp4')
+    while (cap.isOpened()):
+        ret, frame = cap.read()
+        if (fr % r == 0):
+            input_imgs, _ = transforms.Compose([DEFAULT_TRANSFORMS, Resize(opt.img_size)])((frame,np.zeros((1, 5))))
+            input_imgs = Variable(input_imgs.type(Tensor)).unsqueeze(0)
 
-    imgs = []  # Stores image paths
-    img_detections = []  # Stores detections for each image index
+            # Get detections
+            with torch.no_grad():
+                detections = model(input_imgs)
+                detections = non_max_suppression(detections, opt.conf_thres, opt.nms_thres)
 
-    print("\nPerforming object detection:")
-    prev_time = time.time()
-    for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
-        # Configure input
-        input_imgs = Variable(input_imgs.type(Tensor))
+            # Create plot
+            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            plt.figure()
+            fig, ax = plt.subplots(1)
+            ax.imshow(img)
+            
 
-        # Get detections
-        with torch.no_grad():
-            detections = model(input_imgs)
-            detections = non_max_suppression(detections, opt.conf_thres, opt.nms_thres)
+            if detections is not None:
+                # Rescale boxes to original image
+                detections = rescale_boxes(detections[0], opt.img_size, img.shape[:2])
 
-        # Log progress
-        current_time = time.time()
-        inference_time = datetime.timedelta(seconds=current_time - prev_time)
-        prev_time = current_time
-        print("\t+ Batch %d, Inference Time: %s" % (batch_i, inference_time))
+                for x1, y1, x2, y2, conf, cls_pred in detections:
+                    box_w = x2 - x1
+                    box_h = y2 - y1
 
-        # Save image and detections
-        imgs.extend(img_paths)
-        img_detections.extend(detections)
+                    color = (0.2235294117647059, 0.23137254901960785, 0.4745098039215686, 1.0)
+                    # Create a Rectangle patch
+                    bbox = patches.Rectangle((x1, y1), box_w, box_h, linewidth=2, edgecolor=color, facecolor="none")
+                    # Add the bbox to the plot
+                    ax.add_patch(bbox)
+                    # Add label
+                    plt.text(
+                        x1,
+                        y1,
+                        s=classes[int(cls_pred)],
+                        color="white",
+                        verticalalignment="top",
+                        bbox={"color": color, "pad": 0},
+                    )
+                    print(x1,y1,cls_pred)
+                    print(x2,y2,cls_pred)
+                    print()
+                plt.axis("off")
+                plt.gca().xaxis.set_major_locator(NullLocator())
+                plt.gca().yaxis.set_major_locator(NullLocator())
+                fig.canvas.draw()
+                img = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8,sep='')
+                img  = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+                img = cv2.cvtColor(img,cv2.COLOR_RGB2BGR)
+                cv2.imshow("plot",img)
+                
 
-    # Bounding-box colors
-    cmap = plt.get_cmap("tab20b")
-    colors = [cmap(i) for i in np.linspace(0, 1, 20)]
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        fr+=1
 
-    print("\nSaving images:")
-    # Iterate through images and save plot of detections
-    for img_i, (path, detections) in enumerate(zip(imgs, img_detections)):
+    cap.release()
+    cv2.destroyAllWindows()
 
-        print("(%d) Image: '%s'" % (img_i, path))
+    # imgs = []  # Stores image paths
+    # img_detections = []  # Stores detections for each image index
 
-        # Create plot
-        img = np.array(Image.open(path))
-        plt.figure()
-        fig, ax = plt.subplots(1)
-        ax.imshow(img)
+    # print("\nPerforming object detection:")
+    # prev_time = time.time()
+    # for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
+    #     # Configure input
+    #     input_imgs = Variable(input_imgs.type(Tensor))
 
-        # Draw bounding boxes and labels of detections
-        if detections is not None:
-            # Rescale boxes to original image
-            detections = rescale_boxes(detections, opt.img_size, img.shape[:2])
-            unique_labels = detections[:, -1].cpu().unique()
-            n_cls_preds = len(unique_labels)
-            bbox_colors = random.sample(colors, n_cls_preds)
+    #     # Get detections
+    #     with torch.no_grad():
+    #         detections = model(input_imgs)
+    #         detections = non_max_suppression(detections, opt.conf_thres, opt.nms_thres)
 
-            for x1, y1, x2, y2, conf, cls_pred in detections:
+    #     # Log progress
+    #     current_time = time.time()
+    #     inference_time = datetime.timedelta(seconds=current_time - prev_time)
+    #     prev_time = current_time
+    #     print("\t+ Batch %d, Inference Time: %s" % (batch_i, inference_time))
 
-                #print("\t+ Label: %s, Conf: %.5f" % (classes[int(cls_pred)], cls_conf.item()))
+    #     # Save image and detections
+    #     imgs.extend(img_paths)
+    #     img_detections.extend(detections)
 
-                box_w = x2 - x1
-                box_h = y2 - y1
+    # # Bounding-box colors
+    # cmap = plt.get_cmap("tab20b")
+    # colors = [cmap(i) for i in np.linspace(0, 1, 20)]
 
-                color = bbox_colors[int(np.where(unique_labels == int(cls_pred))[0])]
-                # Create a Rectangle patch
-                bbox = patches.Rectangle((x1, y1), box_w, box_h, linewidth=2, edgecolor=color, facecolor="none")
-                # Add the bbox to the plot
-                ax.add_patch(bbox)
-                # Add label
-                plt.text(
-                    x1,
-                    y1,
-                    s=classes[int(cls_pred)],
-                    color="white",
-                    verticalalignment="top",
-                    bbox={"color": color, "pad": 0},
-                )
-                print(x1,y1,cls_pred)
-                print(x2,y2,cls_pred)
-                print()
+    # print("\nSaving images:")
+    # # Iterate through images and save plot of detections
+    # for img_i, (path, detections) in enumerate(zip(imgs, img_detections)):
 
-        # Save generated image with detections
-        plt.axis("off")
-        plt.gca().xaxis.set_major_locator(NullLocator())
-        plt.gca().yaxis.set_major_locator(NullLocator())
-        filename = os.path.basename(path).split(".")[0]
-        output_path = os.path.join("output", f"{filename}.png")
-        plt.savefig(output_path, bbox_inches="tight", pad_inches=0.0)
-        plt.close()
+    #     print("(%d) Image: '%s'" % (img_i, path))
+
+    #     # Create plot
+    #     img = np.array(Image.open(path))
+    #     plt.figure()
+    #     fig, ax = plt.subplots(1)
+    #     ax.imshow(img)
+
+    #     # Draw bounding boxes and labels of detections
+    #     if detections is not None:
+    #         # Rescale boxes to original image
+    #         detections = rescale_boxes(detections, opt.img_size, img.shape[:2])
+    #         unique_labels = detections[:, -1].cpu().unique()
+    #         n_cls_preds = len(unique_labels)
+    #         bbox_colors = random.sample(colors, n_cls_preds)
+
+    #         for x1, y1, x2, y2, conf, cls_pred in detections:
+
+    #             #print("\t+ Label: %s, Conf: %.5f" % (classes[int(cls_pred)], cls_conf.item()))
+
+    #             box_w = x2 - x1
+    #             box_h = y2 - y1
+
+    #             color = bbox_colors[int(np.where(unique_labels == int(cls_pred))[0])]
+    #             # Create a Rectangle patch
+    #             bbox = patches.Rectangle((x1, y1), box_w, box_h, linewidth=2, edgecolor=color, facecolor="none")
+    #             # Add the bbox to the plot
+    #             ax.add_patch(bbox)
+    #             # Add label
+    #             plt.text(
+    #                 x1,
+    #                 y1,
+    #                 s=classes[int(cls_pred)],
+    #                 color="white",
+    #                 verticalalignment="top",
+    #                 bbox={"color": color, "pad": 0},
+    #             )
+    #             print(x1,y1,cls_pred)
+    #             print(x2,y2,cls_pred)
+    #             print()
+
+    #     # Save generated image with detections
+    #     plt.axis("off")
+    #     plt.gca().xaxis.set_major_locator(NullLocator())
+    #     plt.gca().yaxis.set_major_locator(NullLocator())
+    #     filename = os.path.basename(path).split(".")[0]
+    #     output_path = os.path.join("output", f"{filename}.png")
+    #     plt.savefig(output_path, bbox_inches="tight", pad_inches=0.0)
+    #     plt.close()
